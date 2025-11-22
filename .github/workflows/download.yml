@@ -2,18 +2,37 @@ name: Download
 
 on:
   workflow_dispatch:
+    inputs:
+      download_whd:
+        description: 'Download WHD files'
+        required: false
+        default: 'yes'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      download_others:
+        description: 'Download other files'
+        required: false
+        default: 'yes'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+    
 #  schedule:
 #    - cron: '0 3 * * *'
 
-jobs:
-  download:
-    if: github.repository == 'LizenzFass78851/WHD-Archive'
-    runs-on: ubuntu-24.04
-    env:
-        TARGET_DIR: "files&scripts"
+env:
+  TARGET_DIR: "files&scripts"
 
+jobs:
+  download-whd:
+    runs-on: ubuntu-24.04
+    if: ${{ github.repository == 'LizenzFass78851/WHD-Archive' && inputs.download_whd != 'no' }}
     steps:
-      - name: clone
+      - &clone
+        name: clone
         uses: actions/checkout@main
         with:
           clean: false
@@ -55,7 +74,8 @@ jobs:
         run: |
           find "$TARGET_DIR" -type f \( -name "*ESU*" \) -exec rm -f {} \;
 
-      - name: commit
+      - &commit
+        name: commit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -68,3 +88,34 @@ jobs:
           git diff --cached --quiet && exit 0 || git commit -m "Update files"
           git config --local credential.helper '!x() { echo "password=$GITHUB_TOKEN"; };x'
           git push origin $GITHUB_REF_NAME
+
+  download-others:
+    runs-on: ubuntu-24.04
+    needs: download-whd
+    if: ${{ !cancelled() && github.repository == 'LizenzFass78851/WHD-Archive' && inputs.download_others != 'no' }}
+    steps:
+      - *clone
+
+      - name: Download files
+        env:
+          VCPP_LINK: "${{ secrets.VCPP_LINK }}"
+          VCPP_DIR: ./VCPP
+        run: |
+          [ ! -e "$TARGET_DIR" ] && mkdir -p "$TARGET_DIR"
+          cd "$TARGET_DIR"
+
+          [ -e "$VCPP_DIR" ]   && rm -rf "$VCPP_DIR" 
+          [ ! -e "$VCPP_DIR" ] && mkdir -p "$VCPP_DIR"
+          [ -e "$VCPP_DIR" ]   && \
+            wget \
+            -q \
+            --no-directories \
+            --tries=2 \
+            --timeout=3 \
+            --trust-server-names \
+            --content-disposition \
+            --progress=bar:force:noscroll \
+            "$VCPP_LINK" \
+            --directory-prefix="$VCPP_DIR" 
+
+      - *commit
