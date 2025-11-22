@@ -30,6 +30,8 @@ jobs:
   download-whd:
     runs-on: ubuntu-24.04
     if: ${{ github.repository == 'LizenzFass78851/WHD-Archive' && inputs.download_whd != 'no' }}
+    env:
+      MEGA_DIR: ./MDL
     steps:
       - &clone
         name: clone
@@ -55,24 +57,30 @@ jobs:
         env:
           MEGA_LINK: "${{ secrets.MEGA_LINK }}"
         run: |
-          [ -e "$TARGET_DIR" ]   && rm -rf "$TARGET_DIR" 
           [ ! -e "$TARGET_DIR" ] && mkdir -p "$TARGET_DIR"
-          [ -e "$TARGET_DIR" ]   && mega-get "$MEGA_LINK" "$TARGET_DIR"
+          cd "$TARGET_DIR"
 
+          [ -e "$MEGA_DIR" ]   && rm -rf "$MEGA_DIR" 
+          [ ! -e "$MEGA_DIR" ] && mkdir -p "$MEGA_DIR"
+          [ -e "$MEGA_DIR" ]   && mega-get "$MEGA_LINK" ./
+          
       - name: Verify files exist
         run: |
-          if [ -z "$(find "$TARGET_DIR" -type f)" ]; then
+          cd "$TARGET_DIR"
+          if [ -z "$(find "$MEGA_DIR" -type f)" ]; then
             echo "Error: No files found in target directory!"
             exit 1
           fi
 
       - name: Remove files larger than 50 MB
         run: |
-          find "$TARGET_DIR" -type f -size +50M -exec rm -f {} \;
+          cd "$TARGET_DIR"
+          find "$MEGA_DIR" -type f -size +50M -exec rm -f {} \;
 
       - name: Remove some files
         run: |
-          find "$TARGET_DIR" -type f \( -name "*ESU*" \) -exec rm -f {} \;
+          cd "$TARGET_DIR"
+          find "$MEGA_DIR" -type f \( -name "*ESU-*" -o -name "*ESU_*" \) -exec rm -f {} \;
 
       - &commit
         name: commit
